@@ -67682,294 +67682,225 @@
 	});
 	var tc = 1;
 })();
-
-
 // ===================================================================
 //  Loux Old Starve — AutoCraft Hack v2.1
 //  Packet craft: [7, itemId] via FT.GM
 //  Packet recycle: [29, itemId]
-//  Panel auto-opens. Press O to hide/show.
+//  Panel auto-opens on right side of screen
 // ===================================================================
 (function() {
     "use strict";
 
-    if (typeof FT === "undefined" || typeof m === "undefined") {
-        console.error("[LouxOld] Game not loaded.");
-        return;
+    function flash(color, msg) {
+        try {
+            var d = document.createElement("div");
+            d.id = "louxFlash";
+            d.style.cssText = "all:initial;position:fixed;top:5px;left:5px;z-index:2147483647;" +
+                "background:"+color+";color:#000;font:bold 18px monospace;padding:8px 16px;" +
+                "border:2px solid #000;border-radius:4px;pointer-events:none;";
+            d.textContent = "[LouxAC] " + msg;
+            (document.body || document.documentElement).appendChild(d);
+            setTimeout(function() { try { d.remove(); } catch(e) {} }, 4000);
+        } catch(e) { console.error("[LouxAC] flash error:", e); }
     }
 
-    console.log("%c[LouxOld] %cAutoCraft v2.1 — " + window.location.hostname,
-        "color:#0ff;font-weight:bold;font-size:14px", "color:#aaa");
+    if (typeof FT === "undefined" || typeof m === "undefined") {
+        console.error("[LouxAC] Game globals missing!"); return;
+    }
 
-    // =====================================================
-    // SETTINGS
-    // =====================================================
-    var S = {
-        craft:   { e: false, k: "KeyK" },
-        recycle: { e: false, k: "KeyL" }
-    };
-    window.lastCrafted = -1;
+    console.log("[LouxAC] === Starting hack ===");
+    flash("#0f0", "Hack loaded");
 
-    // =====================================================
-    // WRAP FT.GM
-    // =====================================================
-    (function() {
-        var orig = FT.GM;
+    try {
+
+        var S = {
+            craft:   { enabled: false, key: "KeyK" },
+            recycle: { enabled: false, key: "KeyL" }
+        };
+        window.lastCrafted = -1;
+
+        // Hook FT.GM
+        var _origGM = FT.GM;
         FT.GM = function(id) {
             if (id !== undefined && id >= 0) window.lastCrafted = id;
-            return orig.call(this, id);
+            return _origGM.call(this, id);
         };
-    })();
 
-    // =====================================================
-    // CRAFT LOOP 150ms
-    // =====================================================
-    setInterval(function() {
-        if (!S.craft.e) return;
-        if (!FT.rc || FT.rc.readyState !== 1) return;
-        if (!m.xr || m.Jq) return;
-        if (m.pM && (m.pM.id >= 0 || m.pM.Zw >= 0)) return;
-        if (window.lastCrafted < 0) return;
-        if (m.J0) m.J0.enabled = true;
-        FT.GM(window.lastCrafted);
-    }, 150);
+        // Craft loop
+        setInterval(function() {
+            if (!S.craft.enabled) return;
+            try {
+                if (!FT.rc || FT.rc.readyState !== 1) return;
+                if (!m.xr || m.Jq) return;
+                if (m.pM && (m.pM.id >= 0 || m.pM.Zw >= 0)) return;
+                if (window.lastCrafted < 0) return;
+                if (m.J0) m.J0.enabled = true;
+                FT.GM(window.lastCrafted);
+            } catch(e) {}
+        }, 150);
 
-    // =====================================================
-    // RECYCLE LOOP 200ms
-    // =====================================================
-    setInterval(function() {
-        if (!S.recycle.e) return;
-        if (!FT.rc || FT.rc.readyState !== 1) return;
-        if (!m.xr || m.Jq) return;
-        if (window.lastCrafted < 0) return;
-        FT.rc.send(JSON.stringify([29, window.lastCrafted]));
-    }, 200);
+        // Recycle loop
+        setInterval(function() {
+            if (!S.recycle.enabled) return;
+            try {
+                if (!FT.rc || FT.rc.readyState !== 1) return;
+                if (!m.xr || m.Jq) return;
+                if (window.lastCrafted < 0) return;
+                FT.rc.send(JSON.stringify([29, window.lastCrafted]));
+            } catch(e) {}
+        }, 200);
 
-    // =====================================================
-    // KEYBOARD
-    // =====================================================
-    var waitingForKey = null;
-    document.addEventListener("keydown", function(e) {
-        if (waitingForKey) {
-            e.stopImmediatePropagation(); e.preventDefault();
-            if (e.code === "Escape") { waitingForKey = null; refreshPanel(); return; }
-            waitingForKey(e.code); waitingForKey = null; refreshPanel(); return;
-        }
-        if (e.code === S.craft.k) {
-            e.stopImmediatePropagation(); e.preventDefault();
-            S.craft.e = !S.craft.e;
-            if (S.craft.e && m.J0) m.J0.enabled = true;
-            refreshPanel(); return;
-        }
-        if (e.code === S.recycle.k) {
-            e.stopImmediatePropagation(); e.preventDefault();
-            S.recycle.e = !S.recycle.e;
-            refreshPanel(); return;
-        }
-        if (e.code === "KeyO") {
-            e.stopImmediatePropagation(); e.preventDefault();
-            var p = document.getElementById("louxPanel");
-            if (p) p.style.display = (p.style.display === "none") ? "block" : "none";
-        }
-    }, true);
-
-    // =====================================================
-    // UI — inspired by Loux.js guify panel
-    // =====================================================
-    function itemName(id) {
-        if (id < 0) return "None";
-        try { if (typeof C !== "undefined" && typeof Wa !== "undefined" && Wa[id]) return C[Wa[id].WC].name; } catch(e) {}
-        return "ID:" + id;
-    }
-
-    function make(tag, css, text) {
-        var e = document.createElement(tag);
-        for (var k in css) e.style[k] = css[k];
-        if (text) e.textContent = text;
-        return e;
-    }
-
-    function makeHTML(tag, css, html) {
-        var e = document.createElement(tag);
-        for (var k in css) e.style[k] = css[k];
-        if (html) e.innerHTML = html;
-        return e;
-    }
-
-    var panel, body, hud;
-    var LOUX_COLORS = {
-        bg:        "rgba(3,16,34,0.94)",
-        accent:    "rgb(62,125,215)",
-        cyan:      "rgb(0,255,255)",
-        white:     "rgb(255,255,255)",
-        grey:      "rgb(204,204,204)",
-        darkGrey:  "rgb(85,85,85)",
-        black:     "rgba(0,0,0,0.4)",
-        green:     "rgb(76,175,80)"
-    };
-
-    function buildPanel() {
-        if (document.getElementById("louxPanel")) return;
-
-        // Main container — like Loux guify panel (right-aligned)
-        panel = makeHTML("div", {
-            display: "block",
-            position: "fixed",
-            top: "50%",
-            right: "20px",
-            transform: "translateY(-50%)",
-            zIndex: "99999",
-            width: "320px",
-            background: LOUX_COLORS.bg,
-            color: LOUX_COLORS.white,
-            fontFamily: '"Baloo Paaji", Arial, sans-serif',
-            fontSize: "16px",
-            border: "2px solid " + LOUX_COLORS.accent,
-            borderRadius: "8px",
-            padding: "14px 16px",
-            boxShadow: "0 0 50px rgba(0,0,0,0.7)"
-        }, '');
-
-        // Title bar with close button
-        var titleBar = make("div", {
-            display: "flex", justifyContent: "space-between", alignItems: "center",
-            marginBottom: "10px", paddingBottom: "8px",
-            borderBottom: "1px solid " + LOUX_COLORS.accent
-        });
-        var title = makeHTML("span", {
-            fontWeight: "bold", fontSize: "17px", color: LOUX_COLORS.cyan
-        }, "⚙ AutoCraft & Recycle");
-        var closeBtn = make("button", {
-            background: "none", border: "none", color: LOUX_COLORS.white,
-            fontSize: "18px", cursor: "pointer", padding: "0 4px"
-        }, "✕");
-        closeBtn.onmouseover  = function() { this.style.color = "#f00"; };
-        closeBtn.onmouseout   = function() { this.style.color = LOUX_COLORS.white; };
-        closeBtn.onclick      = function() { panel.style.display = "none"; };
-        titleBar.appendChild(title);
-        titleBar.appendChild(closeBtn);
-        panel.appendChild(titleBar);
-
-        // Body
-        body = make("div", {});
-        panel.appendChild(body);
-
-        // Footer hint
-        var footer = makeHTML("div", {
-            marginTop: "10px", paddingTop: "6px",
-            borderTop: "1px solid #333",
-            fontSize: "11px", color: "#555", textAlign: "center"
-        }, '<b style="color:' + LOUX_COLORS.cyan + ';">O</b> hide/show &nbsp;' +
-           '<b style="color:' + LOUX_COLORS.cyan + ';">K</b> craft &nbsp;' +
-           '<b style="color:' + LOUX_COLORS.cyan + ';">L</b> recycle');
-        panel.appendChild(footer);
-
-        document.body.appendChild(panel);
-
-        // HUD
-        hud = make("div", {
-            display: "none",
-            position: "fixed",
-            bottom: "55px",
-            right: "12px",
-            color: LOUX_COLORS.green,
-            font: "12px monospace",
-            zIndex: "99999",
-            pointerEvents: "none",
-            background: "rgba(0,0,0,0.65)",
-            padding: "3px 7px",
-            borderRadius: "4px",
-            border: "1px solid #333",
-            textAlign: "right"
-        });
-        document.body.appendChild(hud);
-
-        refreshPanel();
-        console.log("[LouxOld] Panel OPEN — check right side of screen.");
-    }
-
-    function refreshPanel() {
-        if (!body) return;
-        body.innerHTML = "";
-
-        // AutoCraft checkbox
-        addRow("checkbox", "AutoCraft", S.craft.e, function(v) { S.craft.e = v; });
-        addRow("checkbox", "AutoRecycle", S.recycle.e, function(v) { S.recycle.e = v; });
-        addRow("separator");
-        addRow("keybind", "AutoCraft Key:", S.craft.k, function(k) { S.craft.k = k; });
-        addRow("keybind", "AutoRecycle Key:", S.recycle.k, function(k) { S.recycle.k = k; });
-        addRow("separator");
-        addRow("info", "Last Crafted:", itemName(window.lastCrafted));
-        updateHUD();
-    }
-
-    function addRow(type, label, value, onChange) {
-        var row, cb, sp, btn, ks;
-
-        if (type === "separator") {
-            body.appendChild(make("div", { height: "6px", margin: "2px 0" }));
-            return;
+        function itemName(id) {
+            if (id < 0) return "None";
+            try { if (typeof C!=="undefined" && typeof Wa!=="undefined" && Wa[id]) return C[Wa[id].WC].name; } catch(e) {}
+            return "ID:" + id;
         }
 
-        row = make("div", { display: "flex", alignItems: "center", gap: "8px", margin: "4px 0" });
+        var COL = {
+            bg:   "rgba(3,16,34,0.96)",
+            blue: "#3e7dd7",
+            cyan: "#00ffff",
+            grey: "#cccccc",
+            dim:  "#888888",
+            dark: "rgba(0,0,0,0.45)",
+            grn:  "#4caf50"
+        };
 
-        if (type === "checkbox") {
-            cb = document.createElement("input");
-            cb.type = "checkbox";
-            cb.checked = !!value;
-            cb.style.cssText = "width:15px;height:15px;cursor:pointer;accent-color:" + LOUX_COLORS.accent + ";flex-shrink:0;";
+        var panelEl, bodyEl, hudEl, waitingForKey = null;
+
+        (function buildUI() {
+            if (!document.body) { setTimeout(buildUI, 50); return; }
+
+            panelEl = document.createElement("div");
+            panelEl.id = "louxPanel";
+            panelEl.setAttribute("style",
+                "all:initial;display:block !important;position:fixed !important;" +
+                "top:50% !important;right:20px !important;transform:translateY(-50%) !important;" +
+                "z-index:2147483647 !important;width:300px !important;" +
+                "background:" + COL.bg + " !important;color:" + COL.grey + " !important;" +
+                "font-family:'Baloo Paaji','Segoe UI',Arial,sans-serif !important;" +
+                "font-size:15px !important;line-height:1.4 !important;" +
+                "border:2px solid " + COL.blue + " !important;border-radius:8px !important;" +
+                "padding:14px 16px !important;box-shadow:0 0 60px rgba(0,0,0,0.85) !important;" +
+                "box-sizing:border-box !important;pointer-events:auto !important;" +
+                "visibility:visible !important;opacity:1 !important;");
+
+            var title = document.createElement("div");
+            title.setAttribute("style",
+                "display:flex !important;justify-content:space-between !important;" +
+                "align-items:center !important;margin-bottom:10px !important;" +
+                "padding-bottom:7px !important;border-bottom:1px solid " + COL.blue + " !important;");
+            var tL = document.createElement("span");
+            tL.setAttribute("style", "font-weight:bold !important;font-size:16px !important;color:" + COL.cyan + " !important;");
+            tL.textContent = "⚙ AutoCraft & Recycle";
+            var tR = document.createElement("span");
+            tR.setAttribute("style", "cursor:pointer !important;font-size:20px !important;color:" + COL.grey + " !important;padding:0 4px !important;");
+            tR.textContent = "✕";
+            tR.onmouseover = function() { tR.style.color = "#ff4444"; };
+            tR.onmouseout  = function() { tR.style.color = COL.grey; };
+            tR.onclick     = function() { panelEl.style.display = "none"; };
+            title.appendChild(tL); title.appendChild(tR);
+            panelEl.appendChild(title);
+
+            bodyEl = document.createElement("div");
+            panelEl.appendChild(bodyEl);
+
+            var footer = document.createElement("div");
+            footer.setAttribute("style",
+                "margin-top:10px !important;padding-top:6px !important;" +
+                "border-top:1px solid #333 !important;font-size:10px !important;" +
+                "color:#555 !important;text-align:center !important;");
+            footer.innerHTML = '<b style="color:'+COL.cyan+';">O</b> hide &nbsp;' +
+                               '<b style="color:'+COL.cyan+';">K</b> craft &nbsp;' +
+                               '<b style="color:'+COL.cyan+';">L</b> recycle';
+            panelEl.appendChild(footer);
+            document.body.appendChild(panelEl);
+
+            hudEl = document.createElement("div");
+            hudEl.id = "louxHUD";
+            hudEl.setAttribute("style",
+                "all:initial;display:none !important;position:fixed !important;" +
+                "bottom:55px !important;right:14px !important;color:" + COL.grn + " !important;" +
+                "font:bold 12px monospace !important;z-index:2147483647 !important;" +
+                "pointer-events:none !important;background:rgba(0,0,0,0.7) !important;" +
+                "padding:4px 8px !important;border-radius:4px !important;border:1px solid #333 !important;");
+            document.body.appendChild(hudEl);
+
+            refreshPanel();
+        })();
+
+        function refreshPanel() {
+            if (!bodyEl) return;
+            bodyEl.innerHTML = "";
+            addChk("AutoCraft", S.craft.enabled, function(v) { S.craft.enabled = v; });
+            addChk("AutoRecycle", S.recycle.enabled, function(v) { S.recycle.enabled = v; });
+            addSpc();
+            addKey("AutoCraft Key:", S.craft.key, function(k) { S.craft.key = k; });
+            addKey("AutoRecycle Key:", S.recycle.key, function(k) { S.recycle.key = k; });
+            addSpc();
+            addInf("Last Crafted: " + itemName(window.lastCrafted));
+            updHUD();
+        }
+
+        function addSpc() { var d=document.createElement("div"); d.setAttribute("style","height:5px !important;"); bodyEl.appendChild(d); }
+        function addInf(t) { var d=document.createElement("div"); d.setAttribute("style","color:#999 !important;font-size:11px !important;margin:3px 0 !important;"); d.textContent=t; bodyEl.appendChild(d); }
+
+        function addChk(label, checked, onChange) {
+            var r = document.createElement("div");
+            r.setAttribute("style", "display:flex !important;align-items:center !important;gap:8px !important;margin:3px 0 !important;");
+            var cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!checked;
+            cb.setAttribute("style", "all:initial !important;width:15px !important;height:15px !important;cursor:pointer !important;accent-color:" + COL.blue + " !important;flex-shrink:0 !important;");
             cb.onchange = function() { onChange(cb.checked); refreshPanel(); };
-            sp = make("span", { color: LOUX_COLORS.grey, cursor: "pointer", fontSize: "15px" }, label);
-            sp.onclick = function() { cb.checked = !cb.checked; onChange(cb.checked); refreshPanel(); };
-            row.appendChild(cb); row.appendChild(sp);
+            var lb = document.createElement("span"); lb.setAttribute("style", "color:"+COL.grey+" !important;cursor:pointer !important;font-size:14px !important;"); lb.textContent = label;
+            lb.onclick = function() { cb.checked = !cb.checked; onChange(cb.checked); refreshPanel(); };
+            r.appendChild(cb); r.appendChild(lb); bodyEl.appendChild(r);
         }
 
-        else if (type === "info") {
-            sp = make("span", { color: "#999", fontSize: "12px" }, label + " " + value);
-            row.appendChild(sp);
+        function addKey(label, key, onSet) {
+            var r = document.createElement("div");
+            r.setAttribute("style", "display:flex !important;align-items:center !important;gap:8px !important;margin:3px 0 !important;");
+            var lb = document.createElement("span"); lb.setAttribute("style", "color:"+COL.grey+" !important;font-size:12px !important;flex:1 !important;"); lb.textContent = label;
+            var ks = document.createElement("span"); ks.setAttribute("style", "color:"+COL.cyan+" !important;font-weight:bold !important;font-size:12px !important;background:"+COL.dark+" !important;padding:2px 8px !important;border-radius:3px !important;"); ks.textContent = key;
+            var btn = document.createElement("button"); btn.textContent = "Set";
+            btn.setAttribute("style", "background:"+COL.blue+" !important;color:#fff !important;border:none !important;border-radius:3px !important;padding:4px 10px !important;cursor:pointer !important;font-size:11px !important;");
+            btn.onclick = function() { waitingForKey = { fn: onSet, span: ks }; ks.textContent = "..."; ks.setAttribute("style", "color:#0f0 !important;font-weight:bold !important;font-size:12px !important;background:"+COL.dark+" !important;padding:2px 8px !important;border-radius:3px !important;"); };
+            r.appendChild(lb); r.appendChild(ks); r.appendChild(btn); bodyEl.appendChild(r);
         }
 
-        else if (type === "keybind") {
-            sp = make("span", { color: LOUX_COLORS.grey, fontSize: "13px", flex: "1" }, label);
-            ks = make("span", {
-                color: LOUX_COLORS.cyan, fontWeight: "bold", fontSize: "13px",
-                background: LOUX_COLORS.black, padding: "2px 8px", borderRadius: "3px"
-            }, value);
-            btn = make("button", {
-                background: LOUX_COLORS.accent, color: "#fff", border: "none",
-                borderRadius: "3px", padding: "4px 10px", cursor: "pointer", fontSize: "11px"
-            }, "Set");
-            btn.onmouseover = function() { this.style.background = "rgb(82,145,235)"; };
-            btn.onmouseout  = function() { this.style.background = LOUX_COLORS.accent; };
-            btn.onclick = function() {
-                waitingForKey = onChange;
-                ks.textContent = "...";
-                ks.style.color = "#0f0";
-            };
-            row.appendChild(sp); row.appendChild(ks); row.appendChild(btn);
+        function updHUD() {
+            if (!hudEl) return;
+            if (S.craft.enabled || S.recycle.enabled) {
+                hudEl.style.display = "block";
+                var p = [];
+                if (S.craft.enabled) p.push("AC:" + itemName(window.lastCrafted));
+                if (S.recycle.enabled) p.push("RECYCLE");
+                hudEl.textContent = p.join(" | ");
+            } else { hudEl.style.display = "none"; }
         }
 
-        body.appendChild(row);
+        setInterval(updHUD, 500);
+
+        // Keys
+        document.addEventListener("keydown", function(e) {
+            try {
+                if (waitingForKey) {
+                    e.stopImmediatePropagation(); e.preventDefault();
+                    if (e.code === "Escape") { waitingForKey = null; refreshPanel(); return; }
+                    waitingForKey.fn(e.code);
+                    if (waitingForKey.span) waitingForKey.span.textContent = e.code;
+                    waitingForKey = null; refreshPanel(); return;
+                }
+                if (e.code === S.craft.key) { e.stopImmediatePropagation(); e.preventDefault(); S.craft.enabled = !S.craft.enabled; if (S.craft.enabled && m.J0) m.J0.enabled = true; refreshPanel(); return; }
+                if (e.code === S.recycle.key) { e.stopImmediatePropagation(); e.preventDefault(); S.recycle.enabled = !S.recycle.enabled; refreshPanel(); return; }
+                if (e.code === "KeyO") { e.stopImmediatePropagation(); e.preventDefault(); if (panelEl) panelEl.style.display = (panelEl.style.display === "none") ? "block" : "none"; }
+            } catch(ex) {}
+        }, true);
+
+        flash("#0f0", "Ready! O=panel K=craft L=recycle");
+        console.log("[LouxAC] ========== READY ==========");
+
+    } catch(err) {
+        flash("#f00", "ERROR: " + err.message);
+        console.error("[LouxAC]", err);
     }
-
-    function updateHUD() {
-        if (!hud) return;
-        if (S.craft.e || S.recycle.e) {
-            hud.style.display = "block";
-            var p = [];
-            if (S.craft.e)   p.push("AC:" + itemName(window.lastCrafted));
-            if (S.recycle.e) p.push("RECYCLE");
-            hud.textContent = p.join(" | ");
-        } else { hud.style.display = "none"; }
-    }
-
-    setInterval(updateHUD, 400);
-
-    // ---- Build UI ASAP ----
-    (function wait() {
-        if (document.body) { buildPanel(); }
-        else { setTimeout(wait, 100); }
-    })();
-
-    console.log("[LouxOld] Ready. Craft an item once, then press K.");
 })();
