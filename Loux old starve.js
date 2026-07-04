@@ -2,26 +2,43 @@
 // Loux old starve.js — AutoCraft for Old Starve Client
 // =====================================================
 // LOAD ORDER:  Client code.js  →  Loux old starve.js
+// Works via:   Tampermonkey loader OR manual <script> tag
 // Packet craft: [7, itemId] via FT.GM()
 // Press O to open settings, K to toggle autocraft
+// =====================================================
+// Github: https://github.com/rwerxdwa7-art/wasdxz
 // =====================================================
 
 (function() {
     "use strict";
 
+    // ---- Guard against double injection ----
+    if (window.__LOUX_OLD_LOADED) { console.warn("[LouxOld] Already loaded — skipping."); return; }
+    window.__LOUX_OLD_LOADED = true;
+
     // ---- Wait for DOM + client globals ----
+    var _retries = 0;
     function init() {
-        if (typeof FT === "undefined") return setTimeout(init, 200);
+        _retries++;
+        if (typeof FT === "undefined") {
+            if (_retries <= 1) console.log("[LouxOld] Waiting for game client (FT)...");
+            return setTimeout(init, 200);
+        }
         if (typeof m === "undefined")  return setTimeout(init, 200);
         if (!document.body)           return setTimeout(init, 100);
 
-        console.log("%c[LouxOld] %cAutoCraft starting...",
-            "color:#0ff;font-weight:bold", "color:#aaa");
+        console.log("%c[LouxOld] %cAutoCraft v1.0 — ready!",
+            "color:#0ff;font-weight:bold;font-size:14px", "color:#aaa");
 
         buildSettings();
         wrapFT();
         startLoops();
         injectUI();
+
+        // Signal to loader that we're fully initialized
+        window.dispatchEvent(new CustomEvent("louxold-loaded"));
+        console.log("%c[LouxOld] %cUI ready — press O for settings | K toggles autocraft",
+            "color:#0ff;font-weight:bold", "color:#aaa");
     }
 
     // =====================================================
