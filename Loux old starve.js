@@ -1,4 +1,4 @@
-(function() {
+﻿(function() {
 	function hd(a) {
 		this.Ga = 2147483648;
 		this["a"] = 1103515245;
@@ -67683,21 +67683,22 @@
 	var tc = 1;
 })();
 
+
 // ===================================================================
-//  Loux Old Starve — AutoCraft Hack (appended to client)
+//  Loux Old Starve — AutoCraft Hack v2.1
 //  Packet craft: [7, itemId] via FT.GM
 //  Packet recycle: [29, itemId]
-//  Press O = settings panel | K = toggle autocraft
+//  Panel auto-opens. Press O to hide/show.
 // ===================================================================
 (function() {
     "use strict";
 
     if (typeof FT === "undefined" || typeof m === "undefined") {
-        console.error("[LouxOld] Game globals missing — aborting.");
+        console.error("[LouxOld] Game not loaded.");
         return;
     }
 
-    console.log("%c[LouxOld] %cAutoCraft v2.0 — " + window.location.hostname,
+    console.log("%c[LouxOld] %cAutoCraft v2.1 — " + window.location.hostname,
         "color:#0ff;font-weight:bold;font-size:14px", "color:#aaa");
 
     // =====================================================
@@ -67710,7 +67711,7 @@
     window.lastCrafted = -1;
 
     // =====================================================
-    // WRAP FT.GM — track every crafted item
+    // WRAP FT.GM
     // =====================================================
     (function() {
         var orig = FT.GM;
@@ -67721,7 +67722,7 @@
     })();
 
     // =====================================================
-    // CRAFT LOOP (150ms)
+    // CRAFT LOOP 150ms
     // =====================================================
     setInterval(function() {
         if (!S.craft.e) return;
@@ -67729,12 +67730,12 @@
         if (!m.xr || m.Jq) return;
         if (m.pM && (m.pM.id >= 0 || m.pM.Zw >= 0)) return;
         if (window.lastCrafted < 0) return;
-        if (m.J0) m.J0.enabled = true;   // keep auto-feed on
+        if (m.J0) m.J0.enabled = true;
         FT.GM(window.lastCrafted);
     }, 150);
 
     // =====================================================
-    // RECYCLE LOOP (200ms)
+    // RECYCLE LOOP 200ms
     // =====================================================
     setInterval(function() {
         if (!S.recycle.e) return;
@@ -67745,112 +67746,135 @@
     }, 200);
 
     // =====================================================
-    // KEYBOARD — capture phase to beat game handlers
+    // KEYBOARD
     // =====================================================
     var waitingForKey = null;
-    var keySpan       = null;
-
     document.addEventListener("keydown", function(e) {
-        // Keybind capture mode
         if (waitingForKey) {
-            e.stopImmediatePropagation();
-            e.preventDefault();
-            if (e.code === "Escape") { waitingForKey = null; refreshUI(); return; }
-            waitingForKey(e.code);
-            waitingForKey = null;
-            refreshUI();
-            return;
+            e.stopImmediatePropagation(); e.preventDefault();
+            if (e.code === "Escape") { waitingForKey = null; refreshPanel(); return; }
+            waitingForKey(e.code); waitingForKey = null; refreshPanel(); return;
         }
-
-        // Toggle craft
         if (e.code === S.craft.k) {
-            e.stopImmediatePropagation();
-            e.preventDefault();
+            e.stopImmediatePropagation(); e.preventDefault();
             S.craft.e = !S.craft.e;
             if (S.craft.e && m.J0) m.J0.enabled = true;
-            refreshUI();
-            return;
+            refreshPanel(); return;
         }
-
-        // Toggle recycle
         if (e.code === S.recycle.k) {
-            e.stopImmediatePropagation();
-            e.preventDefault();
+            e.stopImmediatePropagation(); e.preventDefault();
             S.recycle.e = !S.recycle.e;
-            refreshUI();
-            return;
+            refreshPanel(); return;
         }
-
-        // Panel toggle
         if (e.code === "KeyO") {
-            e.stopImmediatePropagation();
-            e.preventDefault();
+            e.stopImmediatePropagation(); e.preventDefault();
             var p = document.getElementById("louxPanel");
-            if (p) { p.style.display = p.style.display === "none" ? "block" : "none"; refreshUI(); }
+            if (p) p.style.display = (p.style.display === "none") ? "block" : "none";
         }
     }, true);
 
     // =====================================================
-    // UI — Loux-style dark panel
+    // UI — inspired by Loux.js guify panel
     // =====================================================
     function itemName(id) {
         if (id < 0) return "None";
-        try {
-            if (typeof C !== "undefined" && typeof Wa !== "undefined" && Wa[id])
-                return C[Wa[id].WC].name;
-        } catch(e) {}
+        try { if (typeof C !== "undefined" && typeof Wa !== "undefined" && Wa[id]) return C[Wa[id].WC].name; } catch(e) {}
         return "ID:" + id;
     }
 
-    function el(tag, css, html) {
+    function make(tag, css, text) {
         var e = document.createElement(tag);
-        if (css) for (var k in css) e.style[k] = css[k];
+        for (var k in css) e.style[k] = css[k];
+        if (text) e.textContent = text;
+        return e;
+    }
+
+    function makeHTML(tag, css, html) {
+        var e = document.createElement(tag);
+        for (var k in css) e.style[k] = css[k];
         if (html) e.innerHTML = html;
         return e;
     }
 
     var panel, body, hud;
+    var LOUX_COLORS = {
+        bg:        "rgba(3,16,34,0.94)",
+        accent:    "rgb(62,125,215)",
+        cyan:      "rgb(0,255,255)",
+        white:     "rgb(255,255,255)",
+        grey:      "rgb(204,204,204)",
+        darkGrey:  "rgb(85,85,85)",
+        black:     "rgba(0,0,0,0.4)",
+        green:     "rgb(76,175,80)"
+    };
 
-    function buildUI() {
+    function buildPanel() {
         if (document.getElementById("louxPanel")) return;
 
-        // --- Settings panel ---
-        panel = el("div", {
-            display: "none",
+        // Main container — like Loux guify panel (right-aligned)
+        panel = makeHTML("div", {
+            display: "block",
             position: "fixed",
             top: "50%",
-            left: "50%",
-            transform: "translate(-50%,-50%)",
+            right: "20px",
+            transform: "translateY(-50%)",
             zIndex: "99999",
-            background: "rgba(3,16,34,0.94)",
-            color: "#fff",
-            font: "15px Arial,sans-serif",
-            border: "2px solid rgb(62,125,215)",
-            borderRadius: "6px",
-            padding: "16px 20px",
-            minWidth: "280px",
-            boxShadow: "0 0 40px rgba(0,0,0,0.8)"
-        }, '<div style="font-size:17px;font-weight:bold;color:rgb(0,255,255);' +
-           'border-bottom:1px solid rgb(62,125,215);padding-bottom:6px;margin-bottom:10px;">' +
-           '⚙ AutoCraft & Recycle</div>' +
-           '<div id="louxBody"></div>' +
-           '<div style="margin-top:10px;padding-top:6px;border-top:1px solid #333;' +
-           'font-size:11px;color:#555;text-align:center;">' +
-           '<b style="color:rgb(0,255,255);">O</b> toggle &nbsp;' +
-           '<b style="color:rgb(0,255,255);">K</b> craft &nbsp;' +
-           '<b style="color:rgb(0,255,255);">L</b> recycle</div>');
-        document.body.appendChild(panel);
-        body = document.getElementById("louxBody");
+            width: "320px",
+            background: LOUX_COLORS.bg,
+            color: LOUX_COLORS.white,
+            fontFamily: '"Baloo Paaji", Arial, sans-serif',
+            fontSize: "16px",
+            border: "2px solid " + LOUX_COLORS.accent,
+            borderRadius: "8px",
+            padding: "14px 16px",
+            boxShadow: "0 0 50px rgba(0,0,0,0.7)"
+        }, '');
 
-        // --- HUD overlay ---
-        hud = el("div", {
+        // Title bar with close button
+        var titleBar = make("div", {
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+            marginBottom: "10px", paddingBottom: "8px",
+            borderBottom: "1px solid " + LOUX_COLORS.accent
+        });
+        var title = makeHTML("span", {
+            fontWeight: "bold", fontSize: "17px", color: LOUX_COLORS.cyan
+        }, "⚙ AutoCraft & Recycle");
+        var closeBtn = make("button", {
+            background: "none", border: "none", color: LOUX_COLORS.white,
+            fontSize: "18px", cursor: "pointer", padding: "0 4px"
+        }, "✕");
+        closeBtn.onmouseover  = function() { this.style.color = "#f00"; };
+        closeBtn.onmouseout   = function() { this.style.color = LOUX_COLORS.white; };
+        closeBtn.onclick      = function() { panel.style.display = "none"; };
+        titleBar.appendChild(title);
+        titleBar.appendChild(closeBtn);
+        panel.appendChild(titleBar);
+
+        // Body
+        body = make("div", {});
+        panel.appendChild(body);
+
+        // Footer hint
+        var footer = makeHTML("div", {
+            marginTop: "10px", paddingTop: "6px",
+            borderTop: "1px solid #333",
+            fontSize: "11px", color: "#555", textAlign: "center"
+        }, '<b style="color:' + LOUX_COLORS.cyan + ';">O</b> hide/show &nbsp;' +
+           '<b style="color:' + LOUX_COLORS.cyan + ';">K</b> craft &nbsp;' +
+           '<b style="color:' + LOUX_COLORS.cyan + ';">L</b> recycle');
+        panel.appendChild(footer);
+
+        document.body.appendChild(panel);
+
+        // HUD
+        hud = make("div", {
             display: "none",
             position: "fixed",
             bottom: "55px",
             right: "12px",
-            color: "#0f0",
+            color: LOUX_COLORS.green,
             font: "12px monospace",
-            zIndex: "9999",
+            zIndex: "99999",
             pointerEvents: "none",
             background: "rgba(0,0,0,0.65)",
             padding: "3px 7px",
@@ -67860,69 +67884,72 @@
         });
         document.body.appendChild(hud);
 
-        refreshUI();
-        console.log("[LouxOld] UI ready. Press O to open settings.");
+        refreshPanel();
+        console.log("[LouxOld] Panel OPEN — check right side of screen.");
     }
 
-    function refreshUI() {
+    function refreshPanel() {
         if (!body) return;
         body.innerHTML = "";
 
-        addCheckbox("AutoCraft",        S.craft.e,   function(v) { S.craft.e   = v; });
-        addCheckbox("AutoRecycle",      S.recycle.e, function(v) { S.recycle.e = v; });
-        addSpacer();
-        addKeybind("AutoCraft Key:",   S.craft.k,   function(k) { S.craft.k   = k; });
-        addKeybind("AutoRecycle Key:", S.recycle.k, function(k) { S.recycle.k = k; });
-        addSpacer();
-        addDisplay("Last Crafted: " + itemName(window.lastCrafted));
+        // AutoCraft checkbox
+        addRow("checkbox", "AutoCraft", S.craft.e, function(v) { S.craft.e = v; });
+        addRow("checkbox", "AutoRecycle", S.recycle.e, function(v) { S.recycle.e = v; });
+        addRow("separator");
+        addRow("keybind", "AutoCraft Key:", S.craft.k, function(k) { S.craft.k = k; });
+        addRow("keybind", "AutoRecycle Key:", S.recycle.k, function(k) { S.recycle.k = k; });
+        addRow("separator");
+        addRow("info", "Last Crafted:", itemName(window.lastCrafted));
         updateHUD();
     }
 
-    function addSpacer() {
-        body.appendChild(el("div", { height:"6px" }));
-    }
+    function addRow(type, label, value, onChange) {
+        var row, cb, sp, btn, ks;
 
-    function addCheckbox(label, checked, onChange) {
-        var r = el("div", { display:"flex", alignItems:"center", gap:"8px", margin:"4px 0" });
-        var cb = el("input", { width:"15px", height:"15px", cursor:"pointer", accentColor:"#4caf50", flexShrink:"0" });
-        cb.type = "checkbox";
-        cb.checked = !!checked;
-        cb.onchange = function() { onChange(cb.checked); refreshUI(); };
-        var lb = el("span", { color:"#ccc", cursor:"pointer", fontSize:"14px" });
-        lb.textContent = label;
-        lb.onclick   = function() { cb.checked = !cb.checked; onChange(cb.checked); refreshUI(); };
-        r.appendChild(cb);
-        r.appendChild(lb);
-        body.appendChild(r);
-    }
+        if (type === "separator") {
+            body.appendChild(make("div", { height: "6px", margin: "2px 0" }));
+            return;
+        }
 
-    function addDisplay(text) {
-        body.appendChild(el("div", {
-            color:"#888", fontSize:"12px", margin:"4px 0"
-        }, text));
-    }
+        row = make("div", { display: "flex", alignItems: "center", gap: "8px", margin: "4px 0" });
 
-    function addKeybind(label, key, onSet) {
-        var r  = el("div", { display:"flex", alignItems:"center", gap:"8px", margin:"4px 0" });
-        var lb = el("span", { color:"#ccc", fontSize:"13px", flex:"1" }, label);
-        var ks = el("span", {
-            color:"rgb(0,255,255)", fontWeight:"bold", fontSize:"12px",
-            background:"rgba(0,0,0,0.4)", padding:"2px 8px", borderRadius:"3px"
-        }, key);
-        var btn = el("button", {
-            background:"rgb(62,125,215)", color:"#fff", border:"none",
-            borderRadius:"3px", padding:"3px 8px", cursor:"pointer", fontSize:"11px"
-        }, "Set");
-        btn.onclick = function() {
-            waitingForKey = onSet;
-            keySpan = ks;
-            ks.textContent = "...";
-            ks.style.color = "#0f0";
-        };
-        r.appendChild(lb);
-        r.appendChild(ks);
-        r.appendChild(btn);
-        body.appendChild(r);
+        if (type === "checkbox") {
+            cb = document.createElement("input");
+            cb.type = "checkbox";
+            cb.checked = !!value;
+            cb.style.cssText = "width:15px;height:15px;cursor:pointer;accent-color:" + LOUX_COLORS.accent + ";flex-shrink:0;";
+            cb.onchange = function() { onChange(cb.checked); refreshPanel(); };
+            sp = make("span", { color: LOUX_COLORS.grey, cursor: "pointer", fontSize: "15px" }, label);
+            sp.onclick = function() { cb.checked = !cb.checked; onChange(cb.checked); refreshPanel(); };
+            row.appendChild(cb); row.appendChild(sp);
+        }
+
+        else if (type === "info") {
+            sp = make("span", { color: "#999", fontSize: "12px" }, label + " " + value);
+            row.appendChild(sp);
+        }
+
+        else if (type === "keybind") {
+            sp = make("span", { color: LOUX_COLORS.grey, fontSize: "13px", flex: "1" }, label);
+            ks = make("span", {
+                color: LOUX_COLORS.cyan, fontWeight: "bold", fontSize: "13px",
+                background: LOUX_COLORS.black, padding: "2px 8px", borderRadius: "3px"
+            }, value);
+            btn = make("button", {
+                background: LOUX_COLORS.accent, color: "#fff", border: "none",
+                borderRadius: "3px", padding: "4px 10px", cursor: "pointer", fontSize: "11px"
+            }, "Set");
+            btn.onmouseover = function() { this.style.background = "rgb(82,145,235)"; };
+            btn.onmouseout  = function() { this.style.background = LOUX_COLORS.accent; };
+            btn.onclick = function() {
+                waitingForKey = onChange;
+                ks.textContent = "...";
+                ks.style.color = "#0f0";
+            };
+            row.appendChild(sp); row.appendChild(ks); row.appendChild(btn);
+        }
+
+        body.appendChild(row);
     }
 
     function updateHUD() {
@@ -67933,19 +67960,16 @@
             if (S.craft.e)   p.push("AC:" + itemName(window.lastCrafted));
             if (S.recycle.e) p.push("RECYCLE");
             hud.textContent = p.join(" | ");
-        } else {
-            hud.style.display = "none";
-        }
+        } else { hud.style.display = "none"; }
     }
 
     setInterval(updateHUD, 400);
 
-    // ---- Build UI after DOM is ready ----
-    if (document.body) {
-        buildUI();
-    } else {
-        document.addEventListener("DOMContentLoaded", buildUI);
-    }
+    // ---- Build UI ASAP ----
+    (function wait() {
+        if (document.body) { buildPanel(); }
+        else { setTimeout(wait, 100); }
+    })();
 
-    console.log("[LouxOld] Loaded. Craft any item once, then press K.");
+    console.log("[LouxOld] Ready. Craft an item once, then press K.");
 })();
