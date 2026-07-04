@@ -1,4 +1,4 @@
-﻿(function() {
+(function() {
 	function hd(a) {
 		this.Ga = 2147483648;
 		this["a"] = 1103515245;
@@ -67683,224 +67683,90 @@
 	var tc = 1;
 })();
 // ===================================================================
-//  Loux Old Starve — AutoCraft Hack v2.1
-//  Packet craft: [7, itemId] via FT.GM
-//  Packet recycle: [29, itemId]
-//  Panel auto-opens on right side of screen
+//  Loux Old Starve v5.1
+//  No internal patches — uses WebSocket hook + canvas hook + DOM
 // ===================================================================
-(function() {
-    "use strict";
+(function(){ "use strict";
+if(typeof FT==="undefined")return;
+console.log("%c[Loux] %cv5.1","color:#0f0;font-weight:bold;font-size:14px","color:#aaa");
 
-    function flash(color, msg) {
-        try {
-            var d = document.createElement("div");
-            d.id = "louxFlash";
-            d.style.cssText = "all:initial;position:fixed;top:5px;left:5px;z-index:2147483647;" +
-                "background:"+color+";color:#000;font:bold 18px monospace;padding:8px 16px;" +
-                "border:2px solid #000;border-radius:4px;pointer-events:none;";
-            d.textContent = "[LouxAC] " + msg;
-            (document.body || document.documentElement).appendChild(d);
-            setTimeout(function() { try { d.remove(); } catch(e) {} }, 4000);
-        } catch(e) { console.error("[LouxAC] flash error:", e); }
-    }
+window.Settings=window.Settings||{};
+window.Settings.AutoCraft={e:false,k:"KeyK"};
+window.Settings.AutoRecycle={e:false,k:"KeyL"};
+window.Settings.Timer={e:true};
+window.Settings.PlayerOntop={e:true};
+window.lastCrafted=-1;
 
-    if (typeof FT === "undefined" || typeof m === "undefined") {
-        console.error("[LouxAC] Game globals missing!"); return;
-    }
+// ---- HOOK FT.GM ----
+var _gm=FT.GM;
+FT.GM=function(id){if(id!==undefined&&id>=0)lastCrafted=id;return _gm.call(this,id);};
 
-    console.log("[LouxAC] === Starting hack ===");
-    flash("#0f0", "Hack loaded");
+// ---- CRAFT + RECYCLE ----
+setInterval(function(){if(!Settings.AutoCraft.e||lastCrafted<0)return;try{if(FT.rc&&FT.rc.readyState===1)FT.GM(lastCrafted);}catch(e){}},150);
+setInterval(function(){if(!Settings.AutoRecycle.e||lastCrafted<0)return;try{if(FT.rc&&FT.rc.readyState===1)FT.rc.send(JSON.stringify([29,lastCrafted]));}catch(e){}},200);
 
-    try {
+function iname(id){if(id<0)return"None";try{if(typeof C!=="undefined"&&typeof Wa!=="undefined"&&Wa[id])return C[Wa[id]].WC.name;}catch(e){}return"ID:"+id;}
 
-        var S = {
-            craft:   { enabled: false, key: "KeyK" },
-            recycle: { enabled: false, key: "KeyL" }
-        };
-        window.lastCrafted = -1;
+// ---- HOOK WEBSOCKET (sniff HP + players) ----
+var _players={}, _myId=-1, _myHp=100, _myH=100, _myC=100;
+var _hpT=0, _gaugeT=0, _lh=1, _lhu=1;
+var _camX=0, _camY=0, _inGame=false;
 
-        // Hook FT.GM
-        var _origGM = FT.GM;
-        FT.GM = function(id) {
-            if (id !== undefined && id >= 0) window.lastCrafted = id;
-            return _origGM.call(this, id);
-        };
+(function(){if(typeof FT==="undefined"){setTimeout(arguments.callee,200);return;}
+var _rc=null;
+Object.defineProperty(FT,"rc",{get:function(){return _rc;},set:function(ws){_rc=ws;if(ws){var oo=null;Object.defineProperty(ws,"onmessage",{get:function(){return oo;},set:function(fn){oo=function(e){try{sniff(e.data);}catch(ex){}return fn.call(this,e);};},configurable:true,enumerable:true});}},configurable:true,enumerable:true});
+console.log("[Loux] WS sniffer active");})();
 
-        // Craft loop
-        setInterval(function() {
-            if (!S.craft.enabled) return;
-            try {
-                if (!FT.rc || FT.rc.readyState !== 1) return;
-                if (!m.xr || m.Jq) return;
-                if (m.pM && (m.pM.id >= 0 || m.pM.Zw >= 0)) return;
-                if (window.lastCrafted < 0) return;
-                if (m.J0) m.J0.enabled = true;
-                FT.GM(window.lastCrafted);
-            } catch(e) {}
-        }, 150);
+function sniff(data){
+    if(typeof data==="string"){try{var m=JSON.parse(data);if(m[0]===0&&m.length>8)_myId=m[9];}catch(e){}}
+    else{try{var a=new Uint8Array(data);if(a[0]===3){var v=new Uint16Array(data);_inGame=true;}if(a[0]===0||a[0]===1){_inGame=true;}}catch(e){}}
+}
 
-        // Recycle loop
-        setInterval(function() {
-            if (!S.recycle.enabled) return;
-            try {
-                if (!FT.rc || FT.rc.readyState !== 1) return;
-                if (!m.xr || m.Jq) return;
-                if (window.lastCrafted < 0) return;
-                FT.rc.send(JSON.stringify([29, window.lastCrafted]));
-            } catch(e) {}
-        }, 200);
+// ---- PLAYERONTOP via canvas hook ----
+var _pd=[], _fc=false;
+var _oD=CanvasRenderingContext2D.prototype.drawImage;
+var _oC=CanvasRenderingContext2D.prototype.clearRect;
 
-        function itemName(id) {
-            if (id < 0) return "None";
-            try { if (typeof C!=="undefined" && typeof Wa!=="undefined" && Wa[id]) return C[Wa[id].WC].name; } catch(e) {}
-            return "ID:" + id;
-        }
+CanvasRenderingContext2D.prototype.clearRect=function(){_pd=[];_fc=true;return _oC.apply(this,arguments);};
+CanvasRenderingContext2D.prototype.drawImage=function(){
+    if(Settings.PlayerOntop.e&&_fc){var img=arguments[0];if(img&&img.src&&typeof img.src==="string"&&(img.src.indexOf("body")>-1||img.src.indexOf("head")>-1)){_pd.push({c:this,a:Array.prototype.slice.call(arguments)});return;}}
+    return _oD.apply(this,arguments);
+};
+setInterval(function(){if(!Settings.PlayerOntop.e||_pd.length===0)return;var d=_pd;_pd=[];for(var i=0;i<d.length;i++){try{_oD.apply(d[i].c,d[i].a);}catch(e){}}},50);
+setInterval(function(){_fc=true;},100);
 
-        var COL = {
-            bg:   "rgba(3,16,34,0.96)",
-            blue: "#3e7dd7",
-            cyan: "#00ffff",
-            grey: "#cccccc",
-            dim:  "#888888",
-            dark: "rgba(0,0,0,0.45)",
-            grn:  "#4caf50"
-        };
+// ---- TIMER via canvas pixel read ----
+var _cv=null, _barY=0, _barFound=false;
+(function scan(){_cv=document.getElementById("game_canvas");if(!_cv){_cv=document.querySelector("canvas");}if(!_cv){setTimeout(scan,500);return;}
+if(!_barFound){try{var w=_cv.width,h=_cv.height;_barY=Math.floor(h-65);_barFound=true;}catch(e){}}
+try{var d=_cv.getImageData(Math.floor(w/2-475+37),_barY,178,18).data;var hp=0;for(var i=0;i<d.length;i+=64){if(d[i]+d[i+1]+d[i+2]>200)hp++;}hp=Math.round(hp*100/(178*18/64));if(hp>0&&hp<=100){var n=Date.now();if(hp<_lh-1){_hpT=n;}_lh=hp;_myHp=hp;}}catch(e){}
+setTimeout(scan,500);})();
 
-        var panelEl, bodyEl, hudEl, waitingForKey = null;
+// ---- DOM ----
+(function mkd(){if(!document.body){setTimeout(mkd,100);return;}
+var hd=document.createElement("div");hd.id="lHUD";hd.style.cssText="position:fixed;bottom:55px;right:14px;color:#0f0;font:bold 12px monospace;z-index:2147483647;pointer-events:none;background:rgba(0,0,0,0.7);padding:4px 8px;border-radius:4px;";document.body.appendChild(hd);
+var td=document.createElement("div");td.id="lTIMER";td.style.cssText="position:fixed;top:30px;left:50%;transform:translateX(-50%);color:#fff;font:bold 16px 'Baloo Paaji',Arial;z-index:2147483647;pointer-events:none;text-shadow:0 0 6px #000;white-space:nowrap;display:none;";document.body.appendChild(td);
+setInterval(function(){var S=Settings,n=Date.now();
+if(hd){if(S.AutoCraft.e||S.AutoRecycle.e){hd.style.display="block";var p=[];if(S.AutoCraft.e)p.push("AC:"+iname(lastCrafted));if(S.AutoRecycle.e)p.push("RECYCLE");hd.textContent=p.join(" | ");}else hd.style.display="none";}
+if(td&&S.Timer.e&&_inGame){td.style.display="block";var hs=_hpT?Math.max(0,~~(11-(n-_hpT)/1000)):0;var gs2=_gaugeT?Math.max(0,~~(6-(n-_gaugeT)/1000)):0;td.textContent=_myHp+"hp  "+hs+"s  "+gs2+"s";}else if(td)td.style.display="none";},500);})();
 
-        (function buildUI() {
-            if (!document.body) { setTimeout(buildUI, 50); return; }
+// ---- KEYS ----
+var wk=null;
+document.addEventListener("keydown",function(e){
+if(wk){e.stopImmediatePropagation();e.preventDefault();if(e.code==="Escape"){wk=null;return;}wk(e.code);wk=null;return;}
+if(e.code===Settings.AutoCraft.k){e.stopImmediatePropagation();e.preventDefault();Settings.AutoCraft.e=!Settings.AutoCraft.e;return;}
+if(e.code===Settings.AutoRecycle.k){e.stopImmediatePropagation();e.preventDefault();Settings.AutoRecycle.e=!Settings.AutoRecycle.e;return;}
+},true);
 
-            panelEl = document.createElement("div");
-            panelEl.id = "louxPanel";
-            panelEl.setAttribute("style",
-                "all:initial;display:block !important;position:fixed !important;" +
-                "top:50% !important;right:20px !important;transform:translateY(-50%) !important;" +
-                "z-index:2147483647 !important;width:300px !important;" +
-                "background:" + COL.bg + " !important;color:" + COL.grey + " !important;" +
-                "font-family:'Baloo Paaji','Segoe UI',Arial,sans-serif !important;" +
-                "font-size:15px !important;line-height:1.4 !important;" +
-                "border:2px solid " + COL.blue + " !important;border-radius:8px !important;" +
-                "padding:14px 16px !important;box-shadow:0 0 60px rgba(0,0,0,0.85) !important;" +
-                "box-sizing:border-box !important;pointer-events:auto !important;" +
-                "visibility:visible !important;opacity:1 !important;");
-
-            var title = document.createElement("div");
-            title.setAttribute("style",
-                "display:flex !important;justify-content:space-between !important;" +
-                "align-items:center !important;margin-bottom:10px !important;" +
-                "padding-bottom:7px !important;border-bottom:1px solid " + COL.blue + " !important;");
-            var tL = document.createElement("span");
-            tL.setAttribute("style", "font-weight:bold !important;font-size:16px !important;color:" + COL.cyan + " !important;");
-            tL.textContent = "⚙ AutoCraft & Recycle";
-            var tR = document.createElement("span");
-            tR.setAttribute("style", "cursor:pointer !important;font-size:20px !important;color:" + COL.grey + " !important;padding:0 4px !important;");
-            tR.textContent = "✕";
-            tR.onmouseover = function() { tR.style.color = "#ff4444"; };
-            tR.onmouseout  = function() { tR.style.color = COL.grey; };
-            tR.onclick     = function() { panelEl.style.display = "none"; };
-            title.appendChild(tL); title.appendChild(tR);
-            panelEl.appendChild(title);
-
-            bodyEl = document.createElement("div");
-            panelEl.appendChild(bodyEl);
-
-            var footer = document.createElement("div");
-            footer.setAttribute("style",
-                "margin-top:10px !important;padding-top:6px !important;" +
-                "border-top:1px solid #333 !important;font-size:10px !important;" +
-                "color:#555 !important;text-align:center !important;");
-            footer.innerHTML = '<b style="color:'+COL.cyan+';">O</b> hide &nbsp;' +
-                               '<b style="color:'+COL.cyan+';">K</b> craft &nbsp;' +
-                               '<b style="color:'+COL.cyan+';">L</b> recycle';
-            panelEl.appendChild(footer);
-            document.body.appendChild(panelEl);
-
-            hudEl = document.createElement("div");
-            hudEl.id = "louxHUD";
-            hudEl.setAttribute("style",
-                "all:initial;display:none !important;position:fixed !important;" +
-                "bottom:55px !important;right:14px !important;color:" + COL.grn + " !important;" +
-                "font:bold 12px monospace !important;z-index:2147483647 !important;" +
-                "pointer-events:none !important;background:rgba(0,0,0,0.7) !important;" +
-                "padding:4px 8px !important;border-radius:4px !important;border:1px solid #333 !important;");
-            document.body.appendChild(hudEl);
-
-            refreshPanel();
-        })();
-
-        function refreshPanel() {
-            if (!bodyEl) return;
-            bodyEl.innerHTML = "";
-            addChk("AutoCraft", S.craft.enabled, function(v) { S.craft.enabled = v; });
-            addChk("AutoRecycle", S.recycle.enabled, function(v) { S.recycle.enabled = v; });
-            addSpc();
-            addKey("AutoCraft Key:", S.craft.key, function(k) { S.craft.key = k; });
-            addKey("AutoRecycle Key:", S.recycle.key, function(k) { S.recycle.key = k; });
-            addSpc();
-            addInf("Last Crafted: " + itemName(window.lastCrafted));
-            updHUD();
-        }
-
-        function addSpc() { var d=document.createElement("div"); d.setAttribute("style","height:5px !important;"); bodyEl.appendChild(d); }
-        function addInf(t) { var d=document.createElement("div"); d.setAttribute("style","color:#999 !important;font-size:11px !important;margin:3px 0 !important;"); d.textContent=t; bodyEl.appendChild(d); }
-
-        function addChk(label, checked, onChange) {
-            var r = document.createElement("div");
-            r.setAttribute("style", "display:flex !important;align-items:center !important;gap:8px !important;margin:3px 0 !important;");
-            var cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!checked;
-            cb.setAttribute("style", "all:initial !important;width:15px !important;height:15px !important;cursor:pointer !important;accent-color:" + COL.blue + " !important;flex-shrink:0 !important;");
-            cb.onchange = function() { onChange(cb.checked); refreshPanel(); };
-            var lb = document.createElement("span"); lb.setAttribute("style", "color:"+COL.grey+" !important;cursor:pointer !important;font-size:14px !important;"); lb.textContent = label;
-            lb.onclick = function() { cb.checked = !cb.checked; onChange(cb.checked); refreshPanel(); };
-            r.appendChild(cb); r.appendChild(lb); bodyEl.appendChild(r);
-        }
-
-        function addKey(label, key, onSet) {
-            var r = document.createElement("div");
-            r.setAttribute("style", "display:flex !important;align-items:center !important;gap:8px !important;margin:3px 0 !important;");
-            var lb = document.createElement("span"); lb.setAttribute("style", "color:"+COL.grey+" !important;font-size:12px !important;flex:1 !important;"); lb.textContent = label;
-            var ks = document.createElement("span"); ks.setAttribute("style", "color:"+COL.cyan+" !important;font-weight:bold !important;font-size:12px !important;background:"+COL.dark+" !important;padding:2px 8px !important;border-radius:3px !important;"); ks.textContent = key;
-            var btn = document.createElement("button"); btn.textContent = "Set";
-            btn.setAttribute("style", "background:"+COL.blue+" !important;color:#fff !important;border:none !important;border-radius:3px !important;padding:4px 10px !important;cursor:pointer !important;font-size:11px !important;");
-            btn.onclick = function() { waitingForKey = { fn: onSet, span: ks }; ks.textContent = "..."; ks.setAttribute("style", "color:#0f0 !important;font-weight:bold !important;font-size:12px !important;background:"+COL.dark+" !important;padding:2px 8px !important;border-radius:3px !important;"); };
-            r.appendChild(lb); r.appendChild(ks); r.appendChild(btn); bodyEl.appendChild(r);
-        }
-
-        function updHUD() {
-            if (!hudEl) return;
-            if (S.craft.enabled || S.recycle.enabled) {
-                hudEl.style.display = "block";
-                var p = [];
-                if (S.craft.enabled) p.push("AC:" + itemName(window.lastCrafted));
-                if (S.recycle.enabled) p.push("RECYCLE");
-                hudEl.textContent = p.join(" | ");
-            } else { hudEl.style.display = "none"; }
-        }
-
-        setInterval(updHUD, 500);
-
-        // Keys
-        document.addEventListener("keydown", function(e) {
-            try {
-                if (waitingForKey) {
-                    e.stopImmediatePropagation(); e.preventDefault();
-                    if (e.code === "Escape") { waitingForKey = null; refreshPanel(); return; }
-                    waitingForKey.fn(e.code);
-                    if (waitingForKey.span) waitingForKey.span.textContent = e.code;
-                    waitingForKey = null; refreshPanel(); return;
-                }
-                if (e.code === S.craft.key) { e.stopImmediatePropagation(); e.preventDefault(); S.craft.enabled = !S.craft.enabled; if (S.craft.enabled && m.J0) m.J0.enabled = true; refreshPanel(); return; }
-                if (e.code === S.recycle.key) { e.stopImmediatePropagation(); e.preventDefault(); S.recycle.enabled = !S.recycle.enabled; refreshPanel(); return; }
-                if (e.code === "KeyO") { e.stopImmediatePropagation(); e.preventDefault(); if (panelEl) panelEl.style.display = (panelEl.style.display === "none") ? "block" : "none"; }
-            } catch(ex) {}
-        }, true);
-
-        flash("#0f0", "Ready! O=panel K=craft L=recycle");
-        console.log("[LouxAC] ========== READY ==========");
-
-    } catch(err) {
-        flash("#f00", "ERROR: " + err.message);
-        console.error("[LouxAC]", err);
-    }
+// ---- GUIFY ----
+var gs=document.createElement("script");gs.src="https://unpkg.com/guify@0.12.0/lib/guify.min.js";
+gs.onload=function(){try{
+var gui=new guify({title:"LOUX Old Starve",theme:{name:"LOUX",colors:{panelBackground:"rgb(0,0,0)",componentBackground:"rgb(3,16,34)",componentForeground:"rgb(62,125,215)",textPrimary:"rgb(0,255,255)",textSecondary:"rgb(255,255,255)",textHover:"rgb(43,16,159)"},font:{fontFamily:"Baloo Paaji",fontSize:"20px",fontWeight:"1"}},align:"right",width:400,barMode:"none",panelMode:"none",opacity:0.85,root:document.body,open:true});
+gui.Register({type:"folder",label:"AutoCraft & Recycle",open:true});
+gui.Register([{type:"checkbox",label:"AutoCraft",object:Settings.AutoCraft,property:"e"},{type:"checkbox",label:"AutoRecycle",object:Settings.AutoRecycle,property:"e"},{type:"display",label:"Craft Key:",object:Settings.AutoCraft,property:"k"},{type:"button",label:"Set",action:function(){wk=function(c){Settings.AutoCraft.k=c;};}},{type:"display",label:"Recycle Key:",object:Settings.AutoRecycle,property:"k"},{type:"button",label:"Set",action:function(){wk=function(c){Settings.AutoRecycle.k=c;};}}],{folder:"AutoCraft & Recycle"});
+gui.Register({type:"folder",label:"Visuals",open:true});
+gui.Register([{type:"checkbox",label:"Timer",object:Settings.Timer,property:"e"},{type:"checkbox",label:"PlayerOntop",object:Settings.PlayerOntop,property:"e"}],{folder:"Visuals"});
+console.log("%c[Loux] %cPanel ready!","color:#0f0;font-weight:bold","color:#0f0");}catch(e){console.error("[Loux] Guify:",e);}};
+gs.onerror=function(){console.error("[Loux] Guify CDN failed");};
+(document.body||document.documentElement).appendChild(gs);
 })();
